@@ -134,25 +134,52 @@ st.divider()
 
 st.title("File Share assistant ")
 
-if prompt := st.chat_input():
-    st.chat_message("user").write(prompt)
-    with st.chat_message("assistant"):
-        # Initialize the Streamlit callback handler
-        st_callback = StreamlitCallbackHandler(st.container())
+import streamlit as st
 
-        # Invoke the agent executor with the callback handler
-        response = agent_executor.stream(
-            {"input": prompt}, {"callbacks": [st_callback]}
-        )
+# Initialize chat history in session state
+if "chat_history" not in st.session_state:
+    st.session_state["chat_history"] = []
 
-        # Display the response
-        for chunk in response:
-            text = chunk.get("answer", False)
-            document= chunk.get("document_names", False)
-            references=chunk.get("concrete_reference", False)
+# Function to handle chat actions
+def chat_actions():
+    user_message = st.session_state["chat_input"]
 
-            st.write(str(text))
-            st.session_state.messages.append({"role": "assistant", "content":  text})
-            st.divider()
-            st.write('Referenz Document:'+str(document))
-            st.session_state.messages.append({"role": "assistant", "content": response})
+    # Append user message to chat history
+    st.session_state["chat_history"].append(
+        {"role": "user", "content": user_message},
+    )
+
+    # Initialize the Streamlit callback handler
+    st_callback = StreamlitCallbackHandler(st.container())
+
+    # Invoke the agent executor with the user input
+    response = agent_executor.stream(
+        {"input": user_message}, {"callbacks": [st_callback]}
+    )
+
+    # Process the response
+    for chunk in response:
+        text = chunk.get("answer", "")
+        document = chunk.get("document_names", "")
+
+        # Optionally append additional information (documents, references)
+        if document!='' or text!='':
+            st.session_state["chat_history"].append(
+                {"role": "assistant", "content": text},
+            )
+
+            st.session_state["chat_history"].append(
+                {"role": "assistant", "content": f"Referenz Document: {document}"}
+            )
+        st.divider()
+
+    # Clear the input field
+    st.session_state["chat_input"] = ""
+
+# Chat input field
+st.text_input("Enter your message", key="chat_input", on_change=chat_actions)
+
+# Display chat history
+for message in st.session_state["chat_history"]:
+    with st.chat_message(name=message["role"]):
+        st.write(message["content"])

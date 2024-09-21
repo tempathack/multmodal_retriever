@@ -2,3 +2,4 @@
 .env
 preprocessed_data/
 raw_data/
+.streamlit/

@@ -20,6 +20,47 @@ st.title("File Insights Dashboard")
 
 
 agent_executor = get_agent()
+st.session_state['messages']=[]
+
+
+st.title("File Share assistant ")
+st.subheader("File Share chat")
+st.divider()
+st.markdown("""
+1. Understanding the RAG Approach:
+RAG is an advanced technique used in modern chatbots where the model first retrieves relevant pieces of information from external sources (documents, databases, or any knowledge repository) and then uses a language model (like GPT) to generate responses based on the retrieved content. This ensures that the chatbot’s responses are both accurate and grounded in factual data.
+
+2. Key Features of the RAG Chatbot:
+Contextual Understanding: The chatbot comprehends your questions in real time and provides responses that are relevant and accurate.
+Document-Driven Responses: It references external documents, ensuring that the answers are grounded in the latest available data.
+Natural Conversation Flow: The chatbot can handle follow-up questions and keeps track of the conversation context.
+Rich Media Support: The chatbot can not only generate textual responses but also provide links to documents, images, or data.
+
+""")
+messages = st.container(height=300)
+if prompt := st.chat_input("Ask the AI Agent anything about the FileShare"):
+    messages.chat_message("user").write(prompt)
+    with messages.chat_message("assistant"):
+        # Initialize the Streamlit callback handler
+        st_callback = StreamlitCallbackHandler(st.container())
+
+        # Invoke the agent executor with the callback handler
+        response = agent_executor.stream(
+            {"input": prompt}, {"callbacks": [st_callback]}
+        )
+
+        # Display the response
+        for chunk in response:
+            text = chunk.get("answer", False)
+            document= chunk.get("document_names", False)
+            references=chunk.get("concrete_reference", False)
+
+            st.write(str(text))
+            st.session_state.messages.append({"role": "assistant", "content":  text})
+            st.divider()
+            st.write('Referenz Document:'+str(document))
+            st.session_state.messages.append({"role": "assistant", "content": response})
+
 # Function to get the modified time of a file
 def get_file_modified_time(file_path):
     file_info = Path(file_path)
@@ -131,28 +172,3 @@ file_count_week_fig.update_xaxes(title_text='Calendar Week')
 st.plotly_chart(file_count_week_fig)
 
 st.divider()
-
-st.title("File Share assistant ")
-
-if prompt := st.chat_input():
-    st.chat_message("user").write(prompt)
-    with st.chat_message("assistant"):
-        # Initialize the Streamlit callback handler
-        st_callback = StreamlitCallbackHandler(st.container())
-
-        # Invoke the agent executor with the callback handler
-        response = agent_executor.stream(
-            {"input": prompt}, {"callbacks": [st_callback]}
-        )
-
-        # Display the response
-        for chunk in response:
-            text = chunk.get("answer", False)
-            document= chunk.get("document_names", False)
-            references=chunk.get("concrete_reference", False)
-
-            st.write(str(text))
-            st.session_state.messages.append({"role": "assistant", "content":  text})
-            st.divider()
-            st.write('Referenz Document:'+str(document))
-            st.session_state.messages.append({"role": "assistant", "content": response})

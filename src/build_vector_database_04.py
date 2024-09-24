@@ -10,6 +10,7 @@ from langchain.agents import AgentExecutor
 from langchain.agents.format_scratchpad import format_to_openai_function_messages
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
 from pydantic import BaseModel,Field
 from typing import List,Annotated
 import numpy as np
@@ -19,10 +20,11 @@ from dotenv import load_dotenv
 from collections import defaultdict
 import streamlit as st
 from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
-
+model_name="claude-3-5-sonnet"
 from utils.utils import *
 preprocess=False
 load_dotenv()
+
 
 # Sanitize your chunks before calling the API
 if preprocess:
@@ -107,35 +109,25 @@ class VectorStoreRetriever:
         return pd.DataFrame(store)
 
 
-def lookup_policy(query: Annotated[
-    str, 'query to retrieve data from the database that should help you answering the question']) -> Annotated[
-    str, 'String corpus with similarity search data from a Rag that should utilize you with information to answer the question it is split into the documents name and the documents content']:
-    """Use this before you answer any question. This contains all information that you need and can be your single point of truth."""
-    df: pd.DataFrame = retriever.query(query, k=5)
-
-    string = 'The following information seems to have answers based on the query asked:\n'
-    for file, content in zip(df['files'].tolist(), df['content'].tolist()):
-        string += f'Document: {file} with Content: {content}\n'
-
-    return string
-
 
 # Usage
 # To create and save embeddings:
 # df = pd.read_csv('your_data.csv')
-#retriever = VectorStoreRetriever.from_docs(df)
+if preprocess:
+    retriever = VectorStoreRetriever.from_docs(df)
 
 # To load saved embeddings:
 retriever = VectorStoreRetriever.load()
 
 
 @tool
-def lookup_policy(query: Annotated[str,'comprehensive elaborated query to retrieve data from the database that should help you answering the question']) -> Annotated[str,'String corpus with similarity search data from a Rag that should utilize you with information to answer the question it is splittet into teh documents name and the documents content']:
+def lookup_policy(query: Annotated[str,'comprehensive elaborated query to retrieve data from the database that should help you answering the question']) -> Annotated[str,'String corpus with similarity search data from a Rag that should utilize you with information to answer the question it is splittet into the documents name and the documents content']:
     """use this before you answer any question this contains all information that you need and can be your single point of truth """
     df :pd.DataFrame = retriever.query(query, k=20)
 
     string='The following information seem to have answers based on the query asked'
     for file,content in zip(df['files'].tolist(),df['content'].tolist()):
+        print(file)
         string+= f'Document:{file} with Content:{content}'+'\n'
 
 
@@ -145,8 +137,7 @@ def lookup_policy(query: Annotated[str,'comprehensive elaborated query to retrie
 class Response(BaseModel):
     """Final response to the question being asked"""
     answer: str = Field(description = "The final answer to respond to the user")
-    sources: List[str] = Field(description="List of page chunks that contain answer to the question. Only include a page chunk if it contains relevant information")
-    document_names:List[str]=Field(description='list of all documents that you used to retrieve the information')
+    document_names:List[str]=Field(description='a list of all the document names referenzed to answer the question')
 
 def parse(output):
     # If no function was invoked, return to user
@@ -182,9 +173,17 @@ Remember, your proficiency lies in understanding and interpreting the documents 
         MessagesPlaceholder(variable_name="agent_scratchpad"),
     ]
 )
-
-llm = ChatOpenAI(temperature=0,   model="gpt-4o",max_tokens=None,streaming=True)
-llm_with_tools = llm.bind_functions([lookup_policy, Response])
+if model_name=="gpt-4o":
+    llm = ChatOpenAI(temperature=0,   model=model_name,max_tokens=None,streaming=True)
+    llm_with_tools = llm.bind_functions([lookup_policy, Response])
+else:
+    llm= ChatAnthropic(
+    model="claude-3-5-sonnet-20240620",
+    temperature=0,
+    max_tokens=1024,
+    timeout=None,
+    max_retries=2)
+    llm_with_tools = llm.bind_tools([lookup_policy, Response])
 agent = (
     {
         "input": lambda x: x["input"],

@@ -5,7 +5,7 @@ import plotly.express as px
 from pathlib import Path
 from datetime import datetime
 import streamlit as st
-from utils.utils import  create_word_doc
+from utils.utils import  create_word_doc,create_rag_report
 from openai import OpenAI
 import streamlit.components.v1 as components
 from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
@@ -98,15 +98,17 @@ if st.session_state['authentication_status']:
                     st.write('Referenzed Chunk of Text:'+str(document))
                     st.divider()
                     st.write('All used Documents retrieved:' + str(set(st.session_state['Documents_used'])))
-                    store_new_results(prompt, text, document,list(set(st.session_state['Documents_used'])))
+                    store_new_results(prompt, text, document,list(set(st.session_state['Documents_used']))[:2])
 
                 st.session_state.messages.append({"role": "assistant", "content": document})
 
-    docx_file = create_word_doc(
+    docx_file = create_rag_report(
         st.session_state['information_store']['input'],
         st.session_state['information_store']['answer'],
         st.session_state['information_store']['document'],
-        st.session_state['information_store']['all_docs']
+        st.session_state['information_store']['all_docs'],
+    logo_path = './static/dmu.img',
+    intro_image_path = './static/dmu.img'
     )
     # Download button for the user
     st.download_button(

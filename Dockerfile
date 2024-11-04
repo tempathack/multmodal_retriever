@@ -14,6 +14,7 @@ COPY src /src
 COPY utils /utils
 COPY .env /.env
 COPY st_db.py /st_db.py
+COPY save.pkl /save.pkl
 COPY poetry.lock /poetry.lock
 COPY pyproject.toml /pyproject.toml
 # Install any needed packages specified in requirements.txt

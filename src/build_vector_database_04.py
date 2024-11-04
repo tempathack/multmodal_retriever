@@ -1,3 +1,6 @@
+import os
+import pdb
+
 import pandas as pd
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_core.tools import tool
@@ -18,16 +21,18 @@ import json
 from langchain_core.agents import AgentActionMessageLog, AgentFinish
 from dotenv import load_dotenv
 from collections import defaultdict
+import shutil
 import streamlit as st
 from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
-model_name="claude-3-5-sonnet"
+model_name="gpt-4o"
 from utils.utils import *
 preprocess=False
 load_dotenv()
 
-
+import streamlit as st
 # Sanitize your chunks before calling the API
 if preprocess:
+    shutil.rmtree('./dbs')
     # Load documents from directory
     loader = DirectoryLoader('./preprocessed_data/text_files', glob="*.txt")
     documents = loader.load()
@@ -44,9 +49,12 @@ if preprocess:
             chunk_sources.append(doc.metadata['source'])
 
 
+
     chunks = sanitize_input(chunks)
 
     df=pd.DataFrame(data={'chunk':chunks,'chunk_src':chunk_sources})
+
+    df.to_pickle('save.pkl')
 
 
 class VectorStoreRetriever:
@@ -80,10 +88,7 @@ class VectorStoreRetriever:
         vecs = collection.get(include=['embeddings', 'documents'])
 
         # Reconstruct df from saved data
-        df = pd.DataFrame({
-            'chunk': vecs['documents'],
-            'chunk_src': [vecs['documents'][i] for i in range(len(vecs['documents']))]  # You might want to adjust this
-        })
+        df=pd.read_pickle('save.pkl')
 
         openai_lc_client = Chroma(
             client=persistent_client,
@@ -96,16 +101,19 @@ class VectorStoreRetriever:
     def query(self, query: str, k: int = 5) -> pd.DataFrame:
         store = defaultdict(list)
         results_with_scores = self._client.similarity_search_with_score(query, k=k)
-
         for doc, score in results_with_scores:
-            doc_index = np.argwhere(self.df.chunk.values.reshape(-1) == doc.page_content)[0]
-            store['files'].append(self.df.iloc[doc_index].chunk_src.squeeze())
-            store['scores'].append(score)
-            store['content'].append(doc.page_content)
-            store['embeddings'].append(
-                self._arr['embeddings'][np.argwhere(np.array(self._arr['documents']) == doc.page_content)[0][0]]
-            )
+            try:
+                doc_index = np.argwhere(self.df.chunk.values.reshape(-1) == doc.page_content)[0]
 
+                store['files'].append(self.df.iloc[doc_index].chunk_src.squeeze())
+                store['scores'].append(score)
+                store['content'].append(doc.page_content)
+                store['embeddings'].append(
+                    self._arr['embeddings'][np.argwhere(np.array(self._arr['documents']) == doc.page_content)[0][0]]
+                )
+            except:
+                pass
+#
         return pd.DataFrame(store)
 
 
@@ -124,10 +132,11 @@ retriever = VectorStoreRetriever.load()
 def lookup_policy(query: Annotated[str,'comprehensive elaborated query to retrieve data from the database that should help you answering the question']) -> Annotated[str,'String corpus with similarity search data from a Rag that should utilize you with information to answer the question it is splittet into the documents name and the documents content']:
     """use this before you answer any question this contains all information that you need and can be your single point of truth """
     df :pd.DataFrame = retriever.query(query, k=20)
+    print('--------------------------------------------------',df)
+    st.session_state['Documents_used']=df['files'].tolist()
 
     string='The following information seem to have answers based on the query asked'
     for file,content in zip(df['files'].tolist(),df['content'].tolist()):
-        print(file)
         string+= f'Document:{file} with Content:{content}'+'\n'
 
 
@@ -137,7 +146,7 @@ def lookup_policy(query: Annotated[str,'comprehensive elaborated query to retrie
 class Response(BaseModel):
     """Final response to the question being asked"""
     answer: str = Field(description = "The final answer to respond to the user")
-    document_names:List[str]=Field(description='a list of all the document names referenzed to answer the question')
+    document_names:List[str]=Field(description='the explicit name of the documents used to retrieve the information')
 
 def parse(output):
     # If no function was invoked, return to user
@@ -168,7 +177,23 @@ As an esteemed file share expert, proficient in utilizing advanced tools, your r
 
 Your access to a trove of documents allows you to provide well-informed answers, leveraging your expertise to guide users in navigating the intricacies of the topic. If there happens to be a query that falls beyond the scope of your expertise, it is essential to communicate this clearly without fabricating responses. Support your responses with cited references to ensure accuracy and credibility in addressing user queries. 
 
-Remember, your proficiency lies in understanding and interpreting the documents at hand to offer precise and relevant insights to users seeking guidance on matters concerning the municipal building department. Your responses should reflect your expertise and be grounded in verifiable information contained within the shared documents."""),
+Remember, your proficiency lies in understanding and interpreting the documents at hand to offer precise and relevant insights to users seeking guidance on matters concerning the municipal building department. Your responses should reflect your expertise and be grounded in verifiable information contained within the shared documents.
+
+
+### desired output:
+
+response:
+
+document:
+
+#### example:
+
+Answer "das haus hat 200 quadratmeter"
+
+Documents:"die information entstammt dokument Baufeld.docx und Jourfix.docx"
+
+
+"""),
         ("user", "{input}"),
         MessagesPlaceholder(variable_name="agent_scratchpad"),
     ]

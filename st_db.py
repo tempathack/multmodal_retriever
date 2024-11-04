@@ -5,6 +5,7 @@ import plotly.express as px
 from pathlib import Path
 from datetime import datetime
 import streamlit as st
+from utils.utils import  create_word_doc
 from openai import OpenAI
 import streamlit.components.v1 as components
 from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
@@ -13,12 +14,17 @@ from dotenv import load_dotenv
 import streamlit_authenticator as stauth
 import yaml
 from yaml.loader import SafeLoader
-
+from collections import defaultdict
 with open('.streamlit/st_auth.yaml') as file:
     config = yaml.load(file, Loader=SafeLoader)
 st.set_page_config(page_title="File Insights with Pygwalker and Plotly", layout="wide")
 # Pre-hashing all plain text passwords once
 # Hasher.hash_passwords(config['credentials'])
+
+
+
+
+
 
 authenticator = stauth.Authenticate(
     config['credentials'],
@@ -27,7 +33,15 @@ authenticator = stauth.Authenticate(
     config['cookie']['expiry_days'],
     config['pre-authorized']
 )
+if 'information_store' not in st.session_state:
+    st.session_state['information_store'] = defaultdict(list)
 
+# Function to accumulate new entries
+def store_new_results(prompt, answer, document,all_docs):
+    st.session_state['information_store']['input'].append(prompt)
+    st.session_state['information_store']['answer'].append(answer)
+    st.session_state['information_store']['document'].append(document)
+    st.session_state['information_store']['all_docs'].append(all_docs)
 authenticator.login()
 if st.session_state['authentication_status']:
     authenticator.logout()
@@ -73,6 +87,7 @@ if st.session_state['authentication_status']:
 
             # Display the response
             for chunk in response:
+                print(chunk)
                 text = chunk.get("answer", False)
                 document= chunk.get("document_names", False)
                 if text:
@@ -81,7 +96,25 @@ if st.session_state['authentication_status']:
                 st.divider()
                 if document:
                     st.write('Referenzed Chunk of Text:'+str(document))
+                    st.divider()
+                    st.write('All used Documents retrieved:' + str(set(st.session_state['Documents_used'])))
+                    store_new_results(prompt, text, document,list(set(st.session_state['Documents_used'])))
+
                 st.session_state.messages.append({"role": "assistant", "content": document})
+
+    docx_file = create_word_doc(
+        st.session_state['information_store']['input'],
+        st.session_state['information_store']['answer'],
+        st.session_state['information_store']['document'],
+        st.session_state['information_store']['all_docs']
+    )
+    # Download button for the user
+    st.download_button(
+        label="Download Word Document",
+        data=docx_file,
+        file_name="Q_A_Report.docx",
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
 
     # Function to get the modified time of a file
     def get_file_modified_time(file_path):

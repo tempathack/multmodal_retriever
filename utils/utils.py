@@ -122,3 +122,39 @@ def create_treemap(df):
 
     # Show the figure
     #fig.write_html('./Laufwerk_structure.html')
+
+
+def create_word_doc(inputs, answers, documents,al_docs):
+    from collections import defaultdict
+    from docx import Document
+    from io import BytesIO
+    doc = Document()
+
+    # Add title
+    doc.add_heading('Session Information', level=1)
+
+    # Add Input Section
+    doc.add_heading('Input Prompts', level=2)
+    for i, item in enumerate(inputs, 1):
+        doc.add_paragraph(f"{i}. {item}")
+
+    # Add Answer Section
+    doc.add_heading('Generated Answers', level=2)
+    for i, item in enumerate(answers, 1):
+        doc.add_paragraph(f"{i}. {item}")
+
+    # Add Document Section
+    doc.add_heading('Most Relevant Documents', level=2)
+    for i, item in enumerate(documents, 1):
+        doc.add_paragraph(f"{i}. {item}")
+
+    doc.add_heading('All associated Documents', level=2)
+    for i, item in enumerate(al_docs, 1):
+        doc.add_paragraph(f"{i}. {str(item)}")
+
+    # Save to BytesIO object
+    byte_io = BytesIO()
+    doc.save(byte_io)
+    byte_io.seek(0)
+
+    return byte_io
